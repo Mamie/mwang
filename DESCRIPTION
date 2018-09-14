@@ -3,7 +3,10 @@ Title: Collection of useful functions
 Version: 0.0.0.9000
 Authors@R: person("Mamie", "Wang", email = "szmamie@live.com", role = c("aut", "cre"))
 Description: What the package does (one paragraph).
-Depends: R (>= 3.5.0)
+Depends: 
+  R (>= 3.5.0),
+  Rclusterpp,
+  parallel   
 License: What license is it under?
 Encoding: UTF-8
 LazyData: true
@@ -12,5 +15,9 @@ Imports:
   readxl,
   magrittr,
   purrr,
-  stats
+  stats,
+  flowCore,
+  devtools,
+  pkgload,
+  citrus
 RoxygenNote: 6.1.0.9000
