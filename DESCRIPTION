@@ -1,0 +1,16 @@
+Package: mwang
+Title: Collection of useful functions
+Version: 0.0.0.9000
+Authors@R: person("Mamie", "Wang", email = "szmamie@live.com", role = c("aut", "cre"))
+Description: What the package does (one paragraph).
+Depends: R (>= 3.5.0)
+License: What license is it under?
+Encoding: UTF-8
+LazyData: true
+Roxygen: list(markdown = TRUE)
+Imports: 
+  readxl,
+  magrittr,
+  purrr,
+  stats
+RoxygenNote: 6.1.0.9000
