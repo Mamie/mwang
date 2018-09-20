@@ -182,3 +182,200 @@ runCITRUS = function(dataDir, selected.desc, fileList=NULL,
   return(list(features=features, foldClustering=citrus.foldClustering,
               combinedFCS=combinedFCSSet))
 }
+
+#' CITRUS regression
+#'
+#' Run CITRUS regression function.
+#'
+#' @param clustering A list object returned by RunCITRUS.
+#' @param outcome A vector of response.
+#' @return A regression result object.
+#' @export
+CITRUSRegression = function(clustering, outcome) {
+  suppressWarnings({
+    citrus.regressionResults = mclapply(c("glmnet"),
+                                        citrus.endpointRegress,
+                                        citrus.foldFeatureSet=clustering$features,
+                                        labels=outcome,
+                                        family="classification")
+  })
+  return(citrus.regressionResults)
+}
+
+#' Plot CITRUS hierarchy
+#'
+#' Plot the hierarchy used in CITRUS colored by stratefying clusters.
+#'
+#' @param clustering A list object returned by RunCITRUS.
+#' @param regressionRes An object returned by CITRUSRegression.
+#' @param seed An optional seed for reproducibility.
+#' @return A ggplot object of the hierarchy.
+#' @export
+#' @import magrittr
+PlotHierarchy = function(clustering, regressionRes, seed=1) {
+  set.seed(seed)
+  diff_cluster = data.frame(cluster=regressionRes[[1]]$differentialFeatures$cv.min$clusters, selected=T)
+  graph.list = citrus::citrus.createHierarchyGraph(clustering$foldClustering$allClustering,
+                                                   clustering$features$allLargeEnoughClusters)
+  g = graph.list$graph
+
+  cluster.attributes = data.frame(cluster=as.numeric(as.character(vertex_attr(g, name='label')))) %>%
+    dplyr::left_join(diff_cluster) %>%
+    tidyr::replace_na(list(selected=F))
+  assignment = clustering$foldClustering$allClustering$clusterMembership
+  n <- c()
+  for (i in seq(nrow(cluster.attributes))) {
+    cluster.data = clustering$combinedFCS$data[assignment[[cluster.attributes$cluster[i]]],]
+    n <- c(n, nrow(cluster.data))
+  }
+  cluster.attributes$size = n
+  g = set.vertex.attribute(g, "alpha", value=sapply(lecluster.attributes$selected, function(x) ifelse(x, 1, 0.2)))
+  g = set.vertex.attribute(g, "size", value=lecluster.attributes$size)
+  net = intergraph::asNetwork(g)
+
+  p <- GGally::ggnet2(net, label='label', alpha="alpha", size='size',
+                      edge.size=0.1, label.size=2.5, label.color='#616568',
+                      palette = "Set2") +
+    guides(size=FALSE, color=guide_legend(title=NULL)) +
+    theme(legend.position='none')
+  return(list(p=p, cluster.attributes = cluster.attributes))
+}
+
+#' Plot CITRUS Cluster MFI Heatmap
+#'
+#' Plot heatmap of mean fluroresence intensity of CITRUS clusters.
+#' @param clustering A list object returned by RunCITRUS.
+#' @param cluster.attributes A data frame returned by PlotHierarchy.
+#' @param name Name of selected channels.
+#' @param desc Description of selected channels.
+#' @return A pheatmap object.
+#' @export
+PlotClusterMFI = function(clustering, cluster.attributes, name, desc, ...) {
+  cluster.mean <- c()
+  assignment = clustering$foldClustering$allClustering$clusterMembership
+  clusters = cluster.attributes$cluster %>% as.character %>% as.numeric
+  for (i in seq(clusters)) {
+    cluster.data = TCD.files$combinedFCS$data[assignment[[clusters[i]]],]
+    cluster.mean <- rbind(cluster.mean,
+                          unlist(apply(cluster.data[,name], 2, mean)))
+  }
+  colnames(cluster.mean) = desc
+  rownames(cluster.mean) = unlist(leclusters)
+  head(cluster.mean)
+
+  cluster.attributes %<>% dplyr::mutate(label=ifelse(selected, '*', '')) %>%
+    tidyr::unite(clusterlabeled, c('cluster', 'label'), sep='', remove=F)
+  p.data <- data.matrix(cluster.mean)
+
+  for(i in seq(10)) {
+    p.data = t(apply(p.data, 1, scale))
+    p.data = apply(p.data, 2, scale)
+  }
+  rownames(p.data) = rownames(cluster.mean)
+  colnames(p.data) = colnames(cluster.mean)
+  annotation = data.frame(selected=cluster.attributes$selected %>%
+                            as.character)
+  rownames(annotation) = lecluster.attributes$cluster
+  options(repr.plot.height=5.5, repr.plot.width=5)
+  p = pheatmap::pheatmap(p.data, annotation_row=annotation, annotation_colors = list(
+    selected = c('FALSE' = "white", 'TRUE' = "firebrick")), ...)
+  return(p)
+}
+
+#' Plot Results of CITRUS regression
+#'
+#' Plot results of CITRUS regression including effect size of the
+#' difference in abundance between groups, boxplot of abundance
+#' between groups and distribution of differential clusters.
+#' @param clustering A list object returned by RunCITRUS.
+#' @param cluster.attributes A object returned by PlotHierarchy.
+#' @param outcome A vector of binary outcome.
+#' @param name Name of selected channels.
+#' @param desc Description of selected channels.
+#' @return A ggplot object of effect size.
+#' @export
+PlotRes = function(clustering, cluster.attributes, outcomes, name, desc, ylab='ES') {
+  abundance = data.frame(clustering$features$allFeatures)
+  colnames(abundance) = sapply(colnames(abundance),
+                               function(x) strsplit(x, '\\.')[[1]][2])
+  abundance$ID = seq(nrow(abundance))
+  abundance$outcome = outcomes
+  diff_clusters =  cluster.attributes[cluster.attributes$selected,]$cluster
+  abundance %<>%
+    tidyr::gather(cluster, level, -c(ID, outcome)) %>%
+    dplyr::mutate(cluster = as.numeric(cluster))
+  p.effsize = abundance %>%
+    dplyr::filter(cluster %in% diff_clusters) %>%
+    dplyr::group_by(cluster) %>%
+    dplyr::mutate(level=as.numeric(level)) %>%
+    dplyr::summarize(d = -effsize::cohen.d(level, outcome)$estimate,
+                     lwr = -effsize::cohen.d(level, outcome)$conf.int[1],
+                     upr = -effsize::cohen.d(level, outcome)$conf.int[2]) %>%
+    dplyr::ungroup() %>%
+    dplyr::left_join(cluster.attributes)
+  ordering.clusters = p.effsize$cluster[order(p.effsize$d)]
+  p.effsize = p.effsize %>%
+    dplyr::mutate(cluster=factor(cluster, levels=ordering.clusters)) %>%
+    na.omit() %>%
+    ggplot(data=.) +
+    geom_point(aes(x=cluster, y=d)) +
+    geom_segment(aes(x=cluster, xend=cluster,
+                     y=lwr, yend=upr), size=0.2) +
+    coord_flip() +
+    geom_hline(aes(yintercept=0), linetype='dashed', color='gray', size=0.5) +
+    theme_classic() + ylab(ylab)
+
+  p.boxplot = abundance %>%
+    dplyr::filter(cluster %in% diff_clusters) %>%
+    dplyr::mutate(cluster = factor(cluster, levels=rev(ordering.clusters))) %>%
+    dplyr::mutate(level = as.numeric(level)) %>%
+    ggplot(data=.) +
+    geom_boxplot(aes(x=outcome, y=level), width=0.3) +
+    geom_jitter(aes(x=outcome, y=level), color='steelblue', size=0.3)+
+    ylab('abundance') +
+    facet_wrap(~cluster, ncol=1) +
+    theme_classic() +
+    theme(strip.background=element_blank(), axis.title.y=element_blank()) +
+    coord_flip()
+
+  p.dist = PlotDist(clustering, name, desc, rev(ordering.clusters))
+  return(list(p.effsize=p.effsize, p.boxplot=p.boxplot, p.dist=p.dist))
+}
+
+#' Plot Marker Distribution
+#'
+#' Plot marker distribution of each cluster.
+#'
+#' @param clustering A list object from RunCITRUS
+#' @param name Name of selected channels.
+#' @param desc Description of selected channels.
+#' @param mincluster Clusters
+PlotDist = function(clustering, name, desc, diff_cluster) {
+  marker.num = length(name)
+  signif.feat = as.numeric(as.character(diff_cluster))
+  assignment = clustering$foldClustering$allClustering$clusterMembership
+
+  background = data.frame(clustering$combinedFCS$data[,name])
+  colnames(background) =  desc
+  background = background %>%
+    tidyr::gather(marker, level)
+  p = list()
+  for (i in seq(length(diff_cluster))) {
+    cluster.df = data.frame(clustering$combinedFCS$data[assignment[[diff_cluster[i]]], name])
+    colnames(cluster.df) = desc
+    p[[i]] = cluster.df %>%
+      tidyr::gather(marker, level) %>%
+      ggplot(data=.) +
+      geom_density(data=background, aes(x=level), fill='gray', alpha=0.5, size=0.) +
+      geom_density(aes(x=level), fill='blue', alpha=0.5, size=0.1) +
+      facet_wrap(~marker, ncol=marker.num, scale='free_x') +
+      theme_classic() +
+      theme(strip.background=element_blank(),
+            axis.title.x=element_blank(),
+            axis.text=element_blank(),
+            axis.ticks=element_blank()) +
+      ylab(diff_cluster[i])
+  }
+  p = cowplot::plot_grid(plotlist=p, ncol=1)
+  return(p)
+}

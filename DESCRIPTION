@@ -19,5 +19,15 @@ Imports:
   flowCore,
   devtools,
   pkgload,
-  citrus
+  citrus,
+  xtable,
+  Rphenograph,
+  ggplot2,
+  Rtsne,
+  dplyr,
+  tidyr,
+  hashmap,
+  Biobase,
+  RColorBrewer,
+  effsize
 RoxygenNote: 6.1.0.9000

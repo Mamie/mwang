@@ -36,7 +36,7 @@ ExportSubsetFCS = function(clustering, out.folder, name, desc) {
 #' @return A data frame that contains the name and description of the channels
 #' @export
 GetParameters = function(path) {
-  fs = flowCore::read.flowSet(path)
+  fs = flowCore::read.flowSet(path[1])
   desc = fs[[1]]@parameters$desc
   name = fs[[1]]@parameters$name
   ret = data.frame(i=seq(length(desc)), name=name, desc=desc)

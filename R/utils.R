@@ -15,3 +15,14 @@ DetachPkgs = function() {
                                         names(sessionInfo()$otherPkgs),sep=""),
          detach, character.only=TRUE)), error=function(e) {})
 }
+
+
+#' Print LaTex Table
+#'
+#' Print LaTeX of given table.
+#' @param table A data matrix or data frame
+#' @param rownames.include A logical scalar for whether to include row names
+#' @return A character scalar of LaTeX table
+PrintLaTeXTable = function(table, rownames.include=T) {
+  print(xtable::xtable(table), rownames.include=rownames.include)
+}
