@@ -20,7 +20,6 @@ Imports:
   devtools,
   pkgload,
   citrus,
-  xtable,
   Rphenograph,
   ggplot2,
   Rtsne,
