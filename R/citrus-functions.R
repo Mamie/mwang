@@ -31,7 +31,6 @@ ReadFCS <- function (filePath, ...) {
 }
 
 #' @inherit citrus::citrus.readFCSSet
-#' @import flowCore
 #' @export
 ReadFCSSet <- function (dataDirectory, fileList, fileSampleSize = 1000,
                         transformColumns = NULL, transformCofactor = 5,
@@ -211,7 +210,6 @@ CITRUSRegression = function(clustering, outcome) {
 #' @param seed An optional seed for reproducibility.
 #' @return A ggplot object of the hierarchy.
 #' @export
-#' @import magrittr
 PlotHierarchy = function(clustering, regressionRes, seed=1) {
   set.seed(seed)
   diff_cluster = data.frame(cluster=regressionRes[[1]]$differentialFeatures$cv.min$clusters, selected=T)
