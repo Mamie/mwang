@@ -9,4 +9,46 @@ vignette: >
   \usepackage[utf8]{inputenc}
 ---
 
-This document demonstrates the usage of CITRUS function. 
+This document demonstrates the usage of CITRUS function. Let's use it to analyze the CLL dataset between NR and CR. First, we want to get the path to FCS file (CD8 pregated) of 7 CR and 24 NR patients. 
+
+```{r file-path}
+outcome_path <- "/Volumes/pdcs/szmamie/data/20180929_CLL_reanalysis/CLL_outcomes.csv"
+TCD_dir_path <- "/Volumes/pdcs/szmamie/data/metaAnalysis/Apheresis/CD8/TCD/"
+TCD_file_list_1 <- list.files(file.path(TCD_path, "8_20160823_ALL_CLL/"), pattern="fcs", full=T)
+TCD_file_list_2 <- list.files(file.path(TCD_path, "9_20170718_CLL/"), pattern="fcs", full=T)
+TCD_file_list <- c(TCD_file_list_1, TCD_file_list_2)
+TCD_file_list_pid <- unname(sapply(TCD_file_list, function(x) {
+  x <- stringr::str_match(x, 'UPCC[0-9_-]+')[1]
+  if (is.na(x)) return(NA)
+  x <- strsplit(x, split='-|_', fixed=F)[[1]]
+  trial <- x[1]
+  pid <- ifelse(nchar(x[2]) == 2, x[2], as.character(as.numeric(x[3])))
+  return(paste(trial, pid, sep='-'))
+}))
+outcome_data <- readr::read_csv(outcome_path)
+patient_selected <- outcome_data$lulian_outcome %in% c('CR', 'NR')
+kableExtra::kable_styling(kableExtra::kable(table(response=outcome_data$lulian_outcome[patient.selected])))
+TCD_file_selected <- TCD_file_list[TCD_file_list_pid %in% outcome_data$pid[patient.selected]]
+length(TCD_file_selected)
+```
+
+After getting the file path, we load the data and get the channel of interest.
+
+```{r load-data}
+TCD_data_test <- mwang::ReadFCSSet(TCD_dir_path, data.frame(default=TCD_file_selected[1]))
+channel_names <- TCD_data_test$fileChannelNames$default[[1]]
+channel_desc <- TCD_data_test$fileReagentNames$default[[1]]
+kableExtra::kable_styling(kableExtra::kable(cbind(seq(length(channel_desc)), channel_desc)))
+channel_desc_selected <- channel_desc[c(4, 5, 6, 7, 10, 12, 13, 15)]
+```
+
+Then we run CITRUS on it. 
+
+```{r run-citrus}
+clustering <- mwang::runCITRUS(TCD_dir_path, channel_desc_selected, TCD_file_selected)
+model <- mwang::CITRUSRegression(clustering, outcome_data$lulian_outcome[patient_selected])
+```
+
+```{r}
+mwang::PlotHierarchy(clustering, model)
+```

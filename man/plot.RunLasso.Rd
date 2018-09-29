@@ -4,7 +4,7 @@
 \alias{plot.RunLasso}
 \title{Plot Lasso Coefficient Trace}
 \usage{
-plot.RunLasso(res)
+\method{plot}{RunLasso}(res)
 }
 \arguments{
 \item{res}{A RunLasso object.}

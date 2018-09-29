@@ -57,7 +57,7 @@ ReadFCSSet <- function (dataDirectory, fileList, fileSampleSize = 1000,
       cat(paste("\tReading file ", fileName, "\n"))
       fcsFile = ReadFCS(filePath)
       fcsData = fcsFile@exprs
-      parameterDescriptions = as.vector(pData(flowCore::parameters(fcsFile))$desc)
+      parameterDescriptions = as.vector(flowCore::pData(flowCore::parameters(fcsFile))$desc)
       parameterNames = flowCore::colnames(fcsFile)
       invalidDescriptions = unname(which(sapply(parameterDescriptions,
                                                 nchar) < 3 | is.na(parameterDescriptions)))
@@ -82,7 +82,7 @@ ReadFCSSet <- function (dataDirectory, fileList, fileSampleSize = 1000,
       conditionData[[fileName]] = fcsData
       print(dim(fcsData))
       if (useChannelDescriptions) {
-        channelDescriptions = as.vector(pData(parameters(fcsFile))$desc)
+        channelDescriptions = as.vector(flowCore::pData(parameters(fcsFile))$desc)
         nchar(channelDescriptions) > 2
       }
     }
@@ -212,13 +212,15 @@ CITRUSRegression = function(clustering, outcome) {
 #' @export
 PlotHierarchy = function(clustering, regressionRes, seed=1) {
   set.seed(seed)
-  diff_cluster = data.frame(cluster=regressionRes[[1]]$differentialFeatures$cv.min$clusters, selected=T)
+  cluster_min = regressionRes[[1]]$differentialFeatures$cv.min$clusters
+  diff_cluster = data.frame(cluster=ifelse(length(cluster_min)==0, NA, cluster_min),
+                            selected=T)
   graph.list = citrus::citrus.createHierarchyGraph(clustering$foldClustering$allClustering,
                                                    clustering$features$allLargeEnoughClusters)
   g = graph.list$graph
 
   cluster.attributes = data.frame(cluster=as.numeric(as.character(vertex_attr(g, name='label')))) %>%
-    dplyr::left_join(diff_cluster) %>%
+    dplyr::left_join(diff_cluster, by = "cluster") %>%
     tidyr::replace_na(list(selected=F))
   assignment = clustering$foldClustering$allClustering$clusterMembership
   n <- c()
@@ -227,8 +229,8 @@ PlotHierarchy = function(clustering, regressionRes, seed=1) {
     n <- c(n, nrow(cluster.data))
   }
   cluster.attributes$size = n
-  g = set.vertex.attribute(g, "alpha", value=sapply(lecluster.attributes$selected, function(x) ifelse(x, 1, 0.2)))
-  g = set.vertex.attribute(g, "size", value=lecluster.attributes$size)
+  g = set.vertex.attribute(g, "alpha", value=sapply(cluster.attributes$selected, function(x) ifelse(x, 1, 0.5)))
+  g = set.vertex.attribute(g, "size", value=cluster.attributes$size * 10)
   net = intergraph::asNetwork(g)
 
   p <- GGally::ggnet2(net, label='label', alpha="alpha", size='size',
