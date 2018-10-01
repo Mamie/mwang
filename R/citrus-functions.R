@@ -35,7 +35,7 @@ ReadFCS <- function (filePath, ...) {
 ReadFCSSet <- function (dataDirectory, fileList, fileSampleSize = 1000,
                         transformColumns = NULL, transformCofactor = 5,
                         scaleColumns = NULL, useChannelDescriptions = F,
-                        readParameters = NULL, ...) {
+                        readParameters = NULL, verbose = TRUE, ...) {
   data = list()
   fileCounter = 1
   fileNames = c()
@@ -44,17 +44,19 @@ ReadFCSSet <- function (dataDirectory, fileList, fileSampleSize = 1000,
   addtlArgs = list(...)
   conditions = colnames(fileList)
   for (i in 1:length(conditions)) {
-    cat(paste("Reading Condition ", conditions[i], "\n"))
+    if (verbose) cat(paste("Reading Condition ", conditions[i], "\n"))
     conditionData = list()
     fileChannelNames[[conditions[i]]] = list()
     fileReagentNames[[conditions[i]]] = list()
+    p <- dplyr::progress_estimated(length(fileList[, conditions[i]]))
+    cat("Reading in FCS files.\n")
     for (fileName in fileList[, conditions[i]]) {
       fileNames[fileCounter] = fileName
       filePath = file.path(fileName)
       if (!file.exists(filePath)) {
         stop(paste("File", filePath, "not found."))
       }
-      cat(paste("\tReading file ", fileName, "\n"))
+      if(verbose) cat(paste("\tReading file ", fileName, "\n"))
       fcsFile = ReadFCS(filePath)
       fcsData = fcsFile@exprs
       parameterDescriptions = as.vector(flowCore::pData(flowCore::parameters(fcsFile))$desc)
@@ -75,17 +77,19 @@ ReadFCSSet <- function (dataDirectory, fileList, fileSampleSize = 1000,
       fileCounter = fileCounter + 1
       if ((!is.null(fileSampleSize)) && (fileSampleSize <
                                          nrow(fcsData))) {
-        cat(paste("\tSampling", fileSampleSize, "events.\n"))
+        if (verbose) cat(paste("\tSampling", fileSampleSize, "events.\n"))
         fcsData = fcsData[sort(sample(1:nrow(fcsData),
                                       fileSampleSize)), ]
       }
       conditionData[[fileName]] = fcsData
-      print(dim(fcsData))
+      if (verbose) cat(paste("\t FCS file size is", str(dim(fcsData)), '.\n'))
       if (useChannelDescriptions) {
         channelDescriptions = as.vector(flowCore::pData(parameters(fcsFile))$desc)
         nchar(channelDescriptions) > 2
       }
+      cat(capture.output(p$tick()))
     }
+    cat('\n')
     data[[conditions[i]]] = do.call("rbind", conditionData)
     rm(conditionData)
     gc()
@@ -134,22 +138,24 @@ ReadFCSSet <- function (dataDirectory, fileList, fileSampleSize = 1000,
 #' @param selected.desc A character vector of selected channel description.
 #' @param fileList A list of full path to FCS files.
 #' @param family A character scalar of model type.
+#' @param transformCofactor An integer for arcsinh transform channel; default 5
 #' @param minimumClusterSizePercent Minimal size of cluster in proportion.
 #' @param fileSampleSize The number of cells subsampled from each file.
 #' @param nFolds Number of folds used for clustering
 #' @param featureType A character vector of feature type (abundances, proportion).
 #' @param seed A seed to reproduce the run.
 #' @param pattern Regular expression used to select FCS files in the folder.
+#' @param labels Optional vector of label used for balancing clustering folds
 #' @return A list consisting of feature matrix, citrus clustering object and
 #' combinedFCSSet object.
 #' @import citrus
 #' @export
 runCITRUS = function(dataDir, selected.desc, fileList=NULL,
-                            family = "classification",
-                            minimumClusterSizePercent = 0.05,
+                            family = "classification", transformCofactor = 5,
+                            minClusterSizePercent = 0.05,
                             fileSampleSize = 1000, nFolds = 1,
                             featureType = c("abundances"), seed=1,
-                            pattern='fcs') {
+                            pattern='fcs', labels=NULL) {
   set.seed(seed)
 
   outputDir = file.path(dataDir, "citrusOutput")
@@ -159,26 +165,26 @@ runCITRUS = function(dataDir, selected.desc, fileList=NULL,
   channels = GetParameters(fileList[1])
   colnames.map = hashmap::hashmap(channels$desc, channels$name)
   colnames.selected = sapply(selected.desc, function(x) colnames.map[[x]])
-  clusteringColumns = colnames.selected
-  transformColumns = colnames.selected
-  transformCofactor = 5
-  scaleColumns = colnames.selected
   fileList = data.frame(defaultCondition=fileList)
 
-  combinedFCSSet = ReadFCSSet(dataDir, fileList, fileSampleSize,
-                              transformColumns, transformCofactor)
+  combinedFCSSet <- ReadFCSSet(dataDir, fileList, fileSampleSize = fileSampleSize,
+                              transformColumns = colnames.selected,
+                              transformCofactor = transformCofactor,
+                              scaleColumns = colnames.selected, verbose=FALSE)
 
-  citrus.foldClustering = citrus.clusterAndMapFolds(combinedFCSSet,
-                                                    clusteringColumns,
-                                                    rep(NA, length(fileList)),
-                                                    nFolds)
-
+  citrus.foldClustering <- citrus.clusterAndMapFolds(combinedFCSSet,
+                                                    clusteringColumns = colnames.selected,
+                                                    labels = labels,
+                                                    nFolds = nFolds)
   conditions = colnames(fileList)[1]
-  features = citrus.calculateFoldFeatureSet(citrus.foldClustering, combinedFCSSet,
-                    featureType=featureType, conditions=conditions,
-                    minimumClusterSizePercent=minimumClusterSizePercent)
+  features = citrus.calculateFoldFeatureSet(citrus.foldClustering,
+                                            combinedFCSSet,
+                                            featureType=featureType,
+                                            conditions=conditions,
+                                            minimumClusterSizePercent=minClusterSizePercent)
 
-  return(list(features=features, foldClustering=citrus.foldClustering,
+  return(list(features=features,
+              foldClustering=citrus.foldClustering,
               combinedFCS=combinedFCSSet))
 }
 
@@ -190,9 +196,10 @@ runCITRUS = function(dataDir, selected.desc, fileList=NULL,
 #' @param outcome A vector of response.
 #' @return A regression result object.
 #' @export
-CITRUSRegression = function(clustering, outcome) {
+CITRUSRegression <- function(clustering, outcome, seed = 1) {
+  set.seed(seed)
   suppressWarnings({
-    citrus.regressionResults = mclapply(c("glmnet"),
+    citrus.regressionResults <- mclapply(c("glmnet"),
                                         citrus.endpointRegress,
                                         citrus.foldFeatureSet=clustering$features,
                                         labels=outcome,
@@ -210,29 +217,32 @@ CITRUSRegression = function(clustering, outcome) {
 #' @param seed An optional seed for reproducibility.
 #' @return A ggplot object of the hierarchy.
 #' @export
-PlotHierarchy = function(clustering, regressionRes, seed=1) {
+PlotHierarchy <- function(clustering, regressionRes, seed=1) {
   set.seed(seed)
-  cluster_min = regressionRes[[1]]$differentialFeatures$cv.min$clusters
-  diff_cluster = data.frame(cluster=ifelse(length(cluster_min)==0, NA, cluster_min),
-                            selected=T)
-  graph.list = citrus::citrus.createHierarchyGraph(clustering$foldClustering$allClustering,
-                                                   clustering$features$allLargeEnoughClusters)
-  g = graph.list$graph
 
-  cluster.attributes = data.frame(cluster=as.numeric(as.character(vertex_attr(g, name='label')))) %>%
+  diff_cluster <- data.frame(cluster=integer(), selected=logical())
+  cluster_min <- regressionRes[[1]]$differentialFeatures$cv.min$clusters
+  if (length(cluster_min)) {
+    diff_cluster <- rbind(data.frame(cluster = cluster_min, selected = T))
+  }
+  graph.list <- citrus::citrus.createHierarchyGraph(clustering$foldClustering$allClustering,
+                                                   clustering$features$allLargeEnoughClusters)
+  g <- graph.list$graph
+
+  cluster.attributes <- data.frame(cluster=as.numeric(as.character(vertex_attr(g, name='label')))) %>%
     dplyr::left_join(diff_cluster, by = "cluster") %>%
     tidyr::replace_na(list(selected=F))
-  assignment = clustering$foldClustering$allClustering$clusterMembership
+  assignment <- clustering$foldClustering$allClustering$clusterMembership
   n <- c()
   for (i in seq(nrow(cluster.attributes))) {
-    cluster.data = clustering$combinedFCS$data[assignment[[cluster.attributes$cluster[i]]],]
+    cluster.data <- clustering$combinedFCS$data[assignment[[cluster.attributes$cluster[i]]],]
     n <- c(n, nrow(cluster.data))
   }
-  cluster.attributes$size = n
-  g = set.vertex.attribute(g, "alpha", value=sapply(cluster.attributes$selected, function(x) ifelse(x, 1, 0.5)))
-  g = set.vertex.attribute(g, "size", value=cluster.attributes$size * 10)
-  net = intergraph::asNetwork(g)
-
+  cluster.attributes$size <- n
+  g <- set.vertex.attribute(g, "alpha", value=sapply(cluster.attributes$selected,
+                                                    function(x) ifelse(x, 1, 0.3)))
+  g <- set.vertex.attribute(g, "size", value=log2(cluster.attributes$size))
+  net <- intergraph::asNetwork(g)
   p <- GGally::ggnet2(net, label='label', alpha="alpha", size='size',
                       edge.size=0.1, label.size=2.5, label.color='#616568',
                       palette = "Set2") +
@@ -255,27 +265,27 @@ PlotClusterMFI = function(clustering, cluster.attributes, name, desc, ...) {
   assignment = clustering$foldClustering$allClustering$clusterMembership
   clusters = cluster.attributes$cluster %>% as.character %>% as.numeric
   for (i in seq(clusters)) {
-    cluster.data = TCD.files$combinedFCS$data[assignment[[clusters[i]]],]
+    cluster.data = clustering$combinedFCS$data[assignment[[clusters[i]]],]
     cluster.mean <- rbind(cluster.mean,
                           unlist(apply(cluster.data[,name], 2, mean)))
   }
   colnames(cluster.mean) = desc
-  rownames(cluster.mean) = unlist(leclusters)
+  rownames(cluster.mean) = unlist(clusters)
   head(cluster.mean)
 
   cluster.attributes %<>% dplyr::mutate(label=ifelse(selected, '*', '')) %>%
     tidyr::unite(clusterlabeled, c('cluster', 'label'), sep='', remove=F)
   p.data <- data.matrix(cluster.mean)
 
-  for(i in seq(10)) {
-    p.data = t(apply(p.data, 1, scale))
-    p.data = apply(p.data, 2, scale)
-  }
+  #for(i in seq(10)) {
+  #  p.data = t(apply(p.data, 1, scale))
+  #  p.data = apply(p.data, 2, scale)
+  #}
   rownames(p.data) = rownames(cluster.mean)
   colnames(p.data) = colnames(cluster.mean)
   annotation = data.frame(selected=cluster.attributes$selected %>%
                             as.character)
-  rownames(annotation) = lecluster.attributes$cluster
+  rownames(annotation) = cluster.attributes$cluster
   options(repr.plot.height=5.5, repr.plot.width=5)
   p = pheatmap::pheatmap(p.data, annotation_row=annotation, annotation_colors = list(
     selected = c('FALSE' = "white", 'TRUE' = "firebrick")), ...)

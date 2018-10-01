@@ -4,7 +4,7 @@
 \alias{CITRUSRegression}
 \title{CITRUS regression}
 \usage{
-CITRUSRegression(clustering, outcome)
+CITRUSRegression(clustering, outcome, seed = 1)
 }
 \arguments{
 \item{clustering}{A list object returned by RunCITRUS.}

@@ -5,9 +5,10 @@
 \title{Run CITRUS}
 \usage{
 runCITRUS(dataDir, selected.desc, fileList = NULL,
-  family = "classification", minimumClusterSizePercent = 0.05,
-  fileSampleSize = 1000, nFolds = 1, featureType = c("abundances"),
-  seed = 1, pattern = "fcs")
+  family = "classification", transformCofactor = 5,
+  minClusterSizePercent = 0.05, fileSampleSize = 1000, nFolds = 1,
+  featureType = c("abundances"), seed = 1, pattern = "fcs",
+  labels = NULL)
 }
 \arguments{
 \item{dataDir}{Full path to the folder containing FCS files.}
@@ -18,7 +19,7 @@ runCITRUS(dataDir, selected.desc, fileList = NULL,
 
 \item{family}{A character scalar of model type.}
 
-\item{minimumClusterSizePercent}{Minimal size of cluster in proportion.}
+\item{transformCofactor}{An integer for arcsinh transform channel; default 5}
 
 \item{fileSampleSize}{The number of cells subsampled from each file.}
 
@@ -29,6 +30,10 @@ runCITRUS(dataDir, selected.desc, fileList = NULL,
 \item{seed}{A seed to reproduce the run.}
 
 \item{pattern}{Regular expression used to select FCS files in the folder.}
+
+\item{labels}{Optional vector of label used for balancing clustering folds}
+
+\item{minimumClusterSizePercent}{Minimal size of cluster in proportion.}
 }
 \value{
 A list consisting of feature matrix, citrus clustering object and

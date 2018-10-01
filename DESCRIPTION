@@ -18,7 +18,6 @@ Imports:
   purrr,
   stats,
   flowCore,
-  devtools,
   pkgload,
   citrus,
   Rphenograph,

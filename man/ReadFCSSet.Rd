@@ -7,7 +7,7 @@
 ReadFCSSet(dataDirectory, fileList, fileSampleSize = 1000,
   transformColumns = NULL, transformCofactor = 5,
   scaleColumns = NULL, useChannelDescriptions = F,
-  readParameters = NULL, ...)
+  readParameters = NULL, verbose = TRUE, ...)
 }
 \arguments{
 \item{dataDirectory}{Full or relative path to directory containin FCS files.}
