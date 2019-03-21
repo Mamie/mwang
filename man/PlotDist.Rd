@@ -4,7 +4,7 @@
 \alias{PlotDist}
 \title{Plot Marker Distribution}
 \usage{
-PlotDist(clustering, name, desc, diff_cluster)
+PlotDist(clustering, name, diff_cluster, desc = NULL)
 }
 \arguments{
 \item{clustering}{A list object from RunCITRUS}

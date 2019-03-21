@@ -42,7 +42,7 @@ kableExtra::kable_styling(kableExtra::kable(outcome_data[patient_selected,]))
 After getting the file path, we test-load the first file in the flow dataset to select the channels of interest.
 
 ```{r load-data, message=FALSE, warning=FALSE}
-TCD_data_example <- mwang::ReadFCSSet(TCD_dir_path, data.frame(default=TCD_file_selected[1]))
+TCD_data_example <- mwang::ReadFCSSet(TCD_dir_path, data.frame(default=TCD_file_selected[1]), verbose=F)
 channel_names <- TCD_data_example$fileChannelNames$default[[1]]
 channel_desc <- TCD_data_example$fileReagentNames$default[[1]]
 kableExtra::kable_styling(kableExtra::kable(cbind(seq(length(channel_desc)), channel_names, channel_desc)))

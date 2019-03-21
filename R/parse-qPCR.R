@@ -21,10 +21,11 @@ ExtractSheetNames = function(path, pattern='') {
 #' @param colnames A logical scalar to indicate if first row contain column names
 #' @return A list of data frame of corresponding sheets
 #' @export
-ReadExcelSheet = function(path, sheets, colnames=F) {
+ReadExcelSheet = function(path, sheets, colnames = F, na_omit = T) {
   purrr::map(sheets, function(x) {
     raw = readxl::read_excel(path, sheet=x, trim_ws=T, col_names=colnames)
-    stats::na.omit(raw)
+    if (na_omit) raw = stats::na.omit(raw)
+    return(raw)
   })
 }
 
@@ -47,8 +48,9 @@ ProcessqPCRList = function(data, qPCR.idx, select.idx) {
 
     if(dim(data[[i]])[2] >= max(qPCR.idx)) {
       colnames(data[[i]]) = header
-      for (j in seq(dim(data[[i]])[1])) {
-        if (!grepl('lot', tolower(data[[i]][j, correct]))) {
+      for (j in seq(nrow(data[[i]]))) {
+        correct_item <- tolower(data[[i]][j, correct])
+        if (!grepl('lot', correct_item)) {
           data[[i]][j, raw] = data[[i]][j, correct]
         }
       }

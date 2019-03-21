@@ -33,9 +33,8 @@ ReadFCS <- function (filePath, ...) {
 #' @inherit citrus::citrus.readFCSSet
 #' @export
 ReadFCSSet <- function (dataDirectory, fileList, fileSampleSize = 1000,
-                        transformColumns = NULL, transformCofactor = 5,
-                        scaleColumns = NULL, useChannelDescriptions = F,
-                        readParameters = NULL, verbose = TRUE, ...) {
+                        transformColumns = NULL, transformCofactor = 5, scaleColumns = NULL,
+                        useChannelDescriptions = F, readParameters = NULL, verbose = TRUE, ...) {
   data = list()
   fileCounter = 1
   fileNames = c()
@@ -49,7 +48,7 @@ ReadFCSSet <- function (dataDirectory, fileList, fileSampleSize = 1000,
     fileChannelNames[[conditions[i]]] = list()
     fileReagentNames[[conditions[i]]] = list()
     p <- dplyr::progress_estimated(length(fileList[, conditions[i]]))
-    cat("Reading in FCS files.\n")
+    if (verbose) cat("Reading in FCS files.\n")
     for (fileName in fileList[, conditions[i]]) {
       fileNames[fileCounter] = fileName
       filePath = file.path(fileName)
@@ -84,7 +83,7 @@ ReadFCSSet <- function (dataDirectory, fileList, fileSampleSize = 1000,
       conditionData[[fileName]] = fcsData
       if (verbose) cat(paste("\t FCS file size is", str(dim(fcsData)), '.\n'))
       if (useChannelDescriptions) {
-        channelDescriptions = as.vector(flowCore::pData(parameters(fcsFile))$desc)
+        channelDescriptions = as.vector(flowCore::pData(flowCore::parameters(fcsFile))$desc)
         nchar(channelDescriptions) > 2
       }
       cat(capture.output(p$tick()))
@@ -162,22 +161,22 @@ runCITRUS = function(dataDir, selected.desc, fileList=NULL,
   if (is.null(fileList)) {
     fileList = list.files(dataDir, pattern=pattern, full=T)
   }
-  channels = GetParameters(fileList[1])
-  colnames.map = hashmap::hashmap(channels$desc, channels$name)
-  colnames.selected = sapply(selected.desc, function(x) colnames.map[[x]])
   fileList = data.frame(defaultCondition=fileList)
-
-  combinedFCSSet <- ReadFCSSet(dataDir, fileList, fileSampleSize = fileSampleSize,
-                              transformColumns = colnames.selected,
-                              transformCofactor = transformCofactor,
-                              scaleColumns = colnames.selected, verbose=FALSE)
+  combinedFCSSet <- ReadFCSSet(dataDir, fileList,
+                               fileSampleSize = fileSampleSize,
+                               transformColumns = selected.desc,
+                               transformCofactor = transformCofactor,
+                               scaleColumns = selected.desc,
+                               useChannelDescriptions=T,
+                               readParameters = selected.desc,
+                               verbose=FALSE)
 
   citrus.foldClustering <- citrus.clusterAndMapFolds(combinedFCSSet,
-                                                    clusteringColumns = colnames.selected,
-                                                    labels = labels,
-                                                    nFolds = nFolds)
-  conditions = colnames(fileList)[1]
-  features = citrus.calculateFoldFeatureSet(citrus.foldClustering,
+                                                     clusteringColumns = selected.desc,
+                                                     labels = labels,
+                                                     nFolds = nFolds)
+  conditions <- colnames(fileList)[1]
+  features <- citrus.calculateFoldFeatureSet(citrus.foldClustering,
                                             combinedFCSSet,
                                             featureType=featureType,
                                             conditions=conditions,
@@ -214,14 +213,20 @@ CITRUSRegression <- function(clustering, outcome, seed = 1) {
 #'
 #' @param clustering A list object returned by RunCITRUS.
 #' @param regressionRes An object returned by CITRUSRegression.
+#' @param lambda A character to indicate lambda choice (min or 1se)
 #' @param seed An optional seed for reproducibility.
 #' @return A ggplot object of the hierarchy.
 #' @export
-PlotHierarchy <- function(clustering, regressionRes, seed=1) {
+PlotHierarchy <- function(clustering, regressionRes, lambda = 'min', seed=1) {
   set.seed(seed)
 
   diff_cluster <- data.frame(cluster=integer(), selected=logical())
-  cluster_min <- regressionRes[[1]]$differentialFeatures$cv.min$clusters
+  if (lambda == '1se') {
+    cluster_min <- regressionRes[[1]]$differentialFeatures$cv.1se$clusters
+  } else {
+    cluster_min <- regressionRes[[1]]$differentialFeatures$cv.min$clusters
+  }
+
   if (length(cluster_min)) {
     diff_cluster <- rbind(data.frame(cluster = cluster_min, selected = T))
   }
@@ -304,7 +309,7 @@ PlotClusterMFI = function(clustering, cluster.attributes, name, desc, ...) {
 #' @param desc Description of selected channels.
 #' @return A ggplot object of effect size.
 #' @export
-PlotRes = function(clustering, cluster.attributes, outcomes, name, desc, ylab='ES') {
+PlotRes = function(clustering, cluster.attributes, outcomes, name, desc = NULL, ylab='ES') {
   abundance = data.frame(clustering$features$allFeatures)
   colnames(abundance) = sapply(colnames(abundance),
                                function(x) strsplit(x, '\\.')[[1]][2])
@@ -348,7 +353,7 @@ PlotRes = function(clustering, cluster.attributes, outcomes, name, desc, ylab='E
     theme(strip.background=element_blank(), axis.title.y=element_blank()) +
     coord_flip()
 
-  p.dist = PlotDist(clustering, name, desc, rev(ordering.clusters))
+  p.dist = PlotDist(clustering, name, rev(ordering.clusters), desc = desc)
   return(list(p.effsize=p.effsize, p.boxplot=p.boxplot, p.dist=p.dist))
 }
 
@@ -360,19 +365,19 @@ PlotRes = function(clustering, cluster.attributes, outcomes, name, desc, ylab='E
 #' @param name Name of selected channels.
 #' @param desc Description of selected channels.
 #' @param mincluster Clusters
-PlotDist = function(clustering, name, desc, diff_cluster) {
+PlotDist = function(clustering, name, diff_cluster, desc = NULL) {
   marker.num = length(name)
   signif.feat = as.numeric(as.character(diff_cluster))
   assignment = clustering$foldClustering$allClustering$clusterMembership
 
   background = data.frame(clustering$combinedFCS$data[,name])
-  colnames(background) =  desc
+  if(!is.null(desc)) colnames(background) = desc
   background = background %>%
     tidyr::gather(marker, level)
   p = list()
   for (i in seq(length(diff_cluster))) {
     cluster.df = data.frame(clustering$combinedFCS$data[assignment[[diff_cluster[i]]], name])
-    colnames(cluster.df) = desc
+    if(!is.null(desc)) colnames(cluster.df) = desc
     p[[i]] = cluster.df %>%
       tidyr::gather(marker, level) %>%
       ggplot(data=.) +

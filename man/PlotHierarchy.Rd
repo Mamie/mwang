@@ -4,12 +4,14 @@
 \alias{PlotHierarchy}
 \title{Plot CITRUS hierarchy}
 \usage{
-PlotHierarchy(clustering, regressionRes, seed = 1)
+PlotHierarchy(clustering, regressionRes, lambda = "min", seed = 1)
 }
 \arguments{
 \item{clustering}{A list object returned by RunCITRUS.}
 
 \item{regressionRes}{An object returned by CITRUSRegression.}
+
+\item{lambda}{A character to indicate lambda choice (min or 1se)}
 
 \item{seed}{An optional seed for reproducibility.}
 }

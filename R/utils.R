@@ -26,3 +26,9 @@ DetachPkgs = function() {
 PrintLaTeXTable = function(table, rownames.include=T) {
   print(xtable::xtable(table), rownames.include=rownames.include)
 }
+
+quiet <- function(x) {
+  sink(tempfile())
+  on.exit(sink())
+  invisible(force(x))
+}

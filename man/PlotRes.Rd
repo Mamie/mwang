@@ -4,7 +4,7 @@
 \alias{PlotRes}
 \title{Plot Results of CITRUS regression}
 \usage{
-PlotRes(clustering, cluster.attributes, outcomes, name, desc,
+PlotRes(clustering, cluster.attributes, outcomes, name, desc = NULL,
   ylab = "ES")
 }
 \arguments{

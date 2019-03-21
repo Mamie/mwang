@@ -4,7 +4,7 @@
 \alias{ReadExcelSheet}
 \title{Read Excel Sheets into a List}
 \usage{
-ReadExcelSheet(path, sheets, colnames = F)
+ReadExcelSheet(path, sheets, colnames = F, na_omit = T)
 }
 \arguments{
 \item{path}{A character scalar of full path name of the excel sheet.}
